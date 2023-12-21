@@ -31,12 +31,12 @@ def NLP_test(x, LAMBDA, PI):
 
     G = sparse.csc_matrix([x[0] - x[1] ** 2 - x[2]])
     Gx = sparse.csc_matrix([[1], [-2 * x[1]], [-1]])
-    Gxx = PI.toarray()[0][0] * sparse.csc_matrix([[0, 0, 0], [0, -2, 0], [0, 0, 0]])
+    Gxx = PI[0] * sparse.csc_matrix([[0, 0, 0], [0, -2, 0], [0, 0, 0]])
 
     H = sparse.csc_matrix([[x[0] ** 2 - x[1] ** 2 + x[2] ** 2 - 2], [x[0] ** 2 + x[1] ** 2 + x[2] ** 2 - 10]])
     Hx = sparse.csc_matrix([[2 * x[0], 2 * x[0]], [-2 * x[1], 2 * x[1]], [2 * x[2], 2 * x[2]]])
-    Hxx = LAMBDA.toarray()[0][0] * sparse.csc_matrix([[2, 0, 0], [0, -2, 0], [0, 0, 2]])
-    Hxx += LAMBDA.toarray()[0][1] * sparse.csc_matrix([[2, 0, 0], [0, 2, 0], [0, 0, 2]])
+    Hxx = LAMBDA[0] * sparse.csc_matrix([[2, 0, 0], [0, -2, 0], [0, 0, 2]])
+    Hxx += LAMBDA[1] * sparse.csc_matrix([[2, 0, 0], [0, 2, 0], [0, 0, 2]])
 
     return f, G, H, fx, Gx, Hx, fxx, Gxx, Hxx
 

@@ -24,15 +24,16 @@ from GridCalEngine.Utils.MIPS.ipm_test import brock_eval, NLP_test
 from GridCalEngine.basic_structures import Vec, Mat
 
 
-def solver(x0: Vec,
-           NV: int,
-           NE: int,
-           NI: int,
-           f_eval: Callable[[Vec, csc, csc], Tuple[Vec, csc, csc, csc, csc, csc, csc, csc, csc]],
-           step_calculator: Callable[[Vec, Vec, int], float],
-           gamma0=10,
-           max_iter=100,
-           verbose: int = 0):
+def mips_solver(x0: Vec,
+                NV: int,
+                NE: int,
+                NI: int,
+                f_eval: Callable[[Vec, csc, csc], Tuple[Vec, csc, csc, csc, csc, csc, csc, csc, csc]],
+                step_calculator: Callable[[Vec, Vec, int], float],
+                gamma0=10,
+                max_iter=100,
+                args=(),
+                verbose: int = 0):
     """
     Solve a non-linear problem of the form:
 
@@ -67,6 +68,7 @@ def solver(x0: Vec,
     :param f_eval: A function pointer called with (x, lambda, pi) that returns (f, G, H, fx, Gx, Hx, fxx, Gxx, Hxx)
     :param step_calculator:
     :param gamma0:
+    :param args:
     :param max_iter:
     :param verbose:
     :return:
@@ -81,22 +83,22 @@ def solver(x0: Vec,
     gamma = gamma0
 
     # Init multiplier values. Defaulted at 1.
-    PI = csc(np.ones(NE))
-    LAMBDA = csc(np.ones(NI))
-    LAMBDA_MAT = sparse.dia_matrix((np.ones(NI), 0), shape=(NI, NI)).tocsc()
-    T = csc(np.ones(NI))
+    PI = np.ones(NE)
+    LAMBDA = np.ones(NI)
+    LAMBDA_MAT = sparse.dia_matrix((LAMBDA, 0), shape=(NI, NI)).tocsc()
+    T = np.ones(NI)
     # T_MAT = sparse.dia_matrix((np.ones(NI), 0), shape=(NI, NI)).tocsc()
-    inv_T = sparse.dia_matrix((np.ones(NI), 0), shape=(NI, NI)).tocsc()
+    T_MAT_inv = sparse.dia_matrix((np.ones(NI), 0), shape=(NI, NI)).tocsc()
     E = csc(np.ones(NI)).transpose()
 
     while error > gamma and iter_counter < max_iter:
 
         # Evaluate the functions, gradients and hessians at the current iteration.
-        f, G, H, fx, Gx, Hx, fxx, Gxx, Hxx = f_eval(x, LAMBDA, PI)
+        f, G, H, fx, Gx, Hx, fxx, Gxx, Hxx = f_eval(x, LAMBDA, PI, *args)
 
         # Compute the submatrices of the reduced NR method
-        M = fxx + Gxx + Hxx + Hx @ inv_T @ LAMBDA_MAT @ Hx.T
-        N = fx + Hx @ LAMBDA.T + Hx @ inv_T @ (gamma * E + LAMBDA_MAT @ H) + Gx @ PI.T
+        M = fxx + Gxx + Hxx + Hx @ T_MAT_inv @ LAMBDA_MAT @ Hx.T
+        N = fx + Hx @ LAMBDA + Hx @ T_MAT_inv @ (gamma * E + LAMBDA_MAT @ H) + Gx @ sparse.dia_matrix(PI).T
 
         # Stack the submatrices and vectors
         J1 = sparse.hstack([M, Gx])
@@ -112,25 +114,25 @@ def solver(x0: Vec,
 
         # Calculate the inequalities residuals using the reduced problem residuals
         dT = - H - T.T - Hx.T @ dXsp
-        dL = - LAMBDA.T + inv_T @ (gamma * E - LAMBDA_MAT @ dT)
+        dL = - LAMBDA.T + T_MAT_inv @ (gamma * E - LAMBDA_MAT @ dT)
 
         # Compute the maximum step allowed
-        alphap = step_calculator(T.toarray(), dT.T.toarray(), NI)
-        alphad = step_calculator(LAMBDA.toarray(), dL.transpose().toarray(), NI)
+        alphap = step_calculator(T, dT.T.toarray(), NI)
+        alphad = step_calculator(LAMBDA, dL.transpose().toarray(), NI)
 
         # Update the values of the variables and multipliers
         x += dX * alphap
-        T += dT.T * alphap
-        LAMBDA += dL.T * alphad
+        T += dT * alphap
+        LAMBDA += dL * alphad
         PI += dP * alphad
         # T_MAT = sparse.dia_matrix((T.toarray(), 0), shape=(NI, NI)).tocsc()
-        inv_T = sparse.dia_matrix((1.0 / T.toarray(), 0), shape=(NI, NI)).tocsc()
-        LAMBDA_MAT = sparse.dia_matrix((LAMBDA.toarray(), 0), shape=(NI, NI)).tocsc()
+        T_MAT_inv = sparse.dia_matrix((1.0 / T, 0), shape=(NI, NI)).tocsc()
+        LAMBDA_MAT = sparse.dia_matrix((LAMBDA, 0), shape=(NI, NI)).tocsc()
 
         # Compute the maximum error and the new gamma value
         error = max(max(abs(dX)), max(abs(dL)), max(abs(dT)), max(abs(dP)))
-        newgamma = 0.1 * (T @ LAMBDA.T).toarray()[0][0] / NI
-        gamma = max(newgamma, 1e-5)  # Maximum tolerance requested.
+        new_gamma = 0.1 * (T @ LAMBDA)[0] / NI
+        gamma = max(new_gamma, 1e-5)  # Maximum tolerance requested.
 
         # Add an iteration step
         iter_counter += 1
@@ -168,7 +170,7 @@ def step_calculation(V: Mat, dV: Mat, NI: int):
 
 def test_solver():
     X = np.array([2., 1., 0.])
-    solver(x0=X, NV=3, NE=1, NI=2, f_eval=NLP_test, step_calculator=step_calculation, verbose=1)
+    mips_solver(x0=X, NV=3, NE=1, NI=2, f_eval=NLP_test, step_calculator=step_calculation, verbose=1)
 
     return
 

@@ -23,7 +23,7 @@ from typing import Union
 from GridCalEngine.Simulations.result_types import ResultTypes
 from GridCalEngine.Simulations.results_table import ResultsTable
 from GridCalEngine.Simulations.results_template import ResultsTemplate
-from GridCalEngine.Core.DataStructures.numerical_circuit import NumericalCircuit
+# from GridCalEngine.Core.DataStructures.numerical_circuit import NumericalCircuit
 from GridCalEngine.Core.Devices.multi_circuit import MultiCircuit
 from GridCalEngine.basic_structures import DateVec, IntVec, Vec, StrVec, CxMat, Mat, BoolVec, CxVec
 from GridCalEngine.enumerations import StudyResultsType
@@ -225,7 +225,7 @@ class PowerFlowResults(ResultsTemplate):
 
         self.register(name='island_number', tpe=int)
 
-    def apply_new_rates(self, nc: NumericalCircuit):
+    def apply_new_rates(self, nc: "NumericalCircuit"):
         """
 
         :param nc:

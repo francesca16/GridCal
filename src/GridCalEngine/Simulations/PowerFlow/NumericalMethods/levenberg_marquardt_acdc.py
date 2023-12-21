@@ -25,12 +25,18 @@ from GridCalEngine.Core.admittance_matrices import compile_y_acdc
 from GridCalEngine.Simulations.PowerFlow.power_flow_results import NumericPowerFlowResults
 import GridCalEngine.Simulations.PowerFlow.NumericalMethods.common_functions as cf
 from GridCalEngine.Simulations.PowerFlow.NumericalMethods.acdc_jacobian import fubm_jacobian, AcDcSolSlicer
-from GridCalEngine.Core.DataStructures.numerical_circuit import NumericalCircuit
+# from GridCalEngine.Core.DataStructures.numerical_circuit import NumericalCircuit
 from GridCalEngine.basic_structures import CxVec
 
 
-def LM_ACDC(nc: NumericalCircuit, Vbus: CxVec, S0: CxVec, I0: CxVec, Y0: CxVec,
-            tolerance=1e-6, max_iter=4, verbose=False) -> NumericPowerFlowResults:
+def LM_ACDC(nc: "NumericalCircuit",
+            Vbus: CxVec,
+            S0: CxVec,
+            I0: CxVec,
+            Y0: CxVec,
+            tolerance=1e-6,
+            max_iter=4,
+            verbose=False) -> NumericPowerFlowResults:
     """
     Solves the power flow problem by the Levenberg-Marquardt power flow algorithm.
     It is usually better than Newton-Raphson, but it takes an order of magnitude more time to converge.
