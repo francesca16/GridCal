@@ -145,8 +145,8 @@ def make_ptdf(Bpqpv: sp.csc_matrix,
               Btau: Vec,
               tau: Vec,
               pqpv: IntVec,
-              distribute_slack: bool = True,
-              add_ps_effects: bool = False) -> Mat:
+              distribute_slack: bool = False,
+              add_ps_effects: bool = True) -> Mat:
     """
     Build the PTDF matrix
     :param Bpqpv: linear susceptance matrix sliced to avoid the slacks
@@ -173,10 +173,10 @@ def make_ptdf(Bpqpv: sp.csc_matrix,
         dP = np.eye(n)
 
     if add_ps_effects:
-        # Pps = -(Btau @ tau)
-        Pps = (Bf.T @ tau)
+        Pps = Btau @ tau
+        # Pps = (Bf.T @ tau)
         for i in pqpv:
-            dP[:, i] += Pps  # effect of the phase shifters
+            dP[:, i] -= Pps  # effect of the phase shifters
 
     # solve for change in voltage angles
     dtheta_ref = spsolve(Bpqpv, dP[noslack, :])

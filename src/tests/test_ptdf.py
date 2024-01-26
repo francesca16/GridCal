@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 from GridCalEngine.api import *
 from GridCalEngine.Simulations.ContingencyAnalysis.contingency_plan import add_n1_contingencies
 from GridCalEngine.Simulations.PowerFlow.power_flow_worker import multi_island_pf_nc
@@ -148,7 +149,51 @@ def test_ptdf_ieee14_definition_ps():
         print("Analytic PTDF:\n", simulation.results.PTDF)
         print("Definition PTDF:\n", ptdf)
 
-        ok = np.allclose(simulation.results.PTDF, ptdf, atol=1e-6)
+        # both PTDF must be different because in the first we embedded the PS effects
+        ok = not np.allclose(simulation.results.PTDF, ptdf, atol=1e-6)
+        assert ok
+
+
+def test_ptdf_ieee14_definition_ps_flows():
+    """
+    Compare the PTDF computed analitically and the PTDF computed using DC power flow
+    to check that they are exactly the same, for IEEE14 with a phase shifter
+    """
+    for fname in [
+        os.path.join('data', 'grids', 'IEEE14-bus_d-6_11-6_13.gridcal'),
+    ]:
+        main_circuit = FileOpen(fname).open()
+
+        # add all branch contingencies
+        add_n1_contingencies(branches=main_circuit.get_branches(),
+                             vmax=1e20, vmin=0,
+                             filter_branches_by_voltage=False,
+                             branch_types=[DeviceType.LineDevice, DeviceType.Transformer2WDevice])
+
+        # run the linear analysis
+        options = LinearAnalysisOptions(distribute_slack=False, correct_values=False)
+        linear_drv = LinearAnalysisDriver(grid=main_circuit, options=options)
+        linear_drv.run()
+        linear_Sf = linear_drv.results.Sf * main_circuit.Sbase
+
+        # compute the PTDF by the definition: PTDF(i, j) = (flow base(i) - modified flow(i)) / bus power increase(j)
+        nc = compile_numerical_circuit_at(main_circuit, t_idx=None)
+
+        options = PowerFlowOptions(solver_type=SolverType.DC)
+        pf_dc_res = multi_island_pf_nc(nc=nc, options=options)
+        linear_pf_Sf = pf_dc_res.Sf.real
+
+        options2 = PowerFlowOptions(solver_type=SolverType.NR)
+        pf_dc_res = multi_island_pf_nc(nc=nc, options=options2)
+        nonlinear_pf_Sf = pf_dc_res.Sf.real
+
+        df = pd.DataFrame(data={"Sf PTDF (con ps)": linear_Sf,
+                                "Sf linear pf": linear_pf_Sf,
+                                "Sf nonlinear pf": nonlinear_pf_Sf})
+        print(df)
+
+        # both PTDF must be different because in the first we embedded the PS effects
+        ok = np.allclose(linear_Sf, linear_pf_Sf, atol=1e-6)
         assert ok
 
 
