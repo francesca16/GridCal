@@ -192,6 +192,9 @@ def make_ptdf(Bpqpv: sp.csc_matrix,
     # Bf is a sparse matrix
     PTDF = Bf * dTheta
 
+    # if add_ps_effects:
+    #     PTDF += sp.diags(tau) @ Btau.T
+
     return PTDF
 
 
