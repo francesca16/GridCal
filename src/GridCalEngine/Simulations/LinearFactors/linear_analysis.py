@@ -142,15 +142,20 @@ def make_acptdf(Ybus: sp.csc_matrix,
 
 def make_ptdf(Bpqpv: sp.csc_matrix,
               Bf: sp.csc_matrix,
-              Btheta: Vec,
+              Btau: Vec,
+              tau: Vec,
               pqpv: IntVec,
-              distribute_slack: bool = True) -> Mat:
+              distribute_slack: bool = True,
+              add_ps_effects: bool = False) -> Mat:
     """
     Build the PTDF matrix
-    :param Bbus: DC-linear susceptance matrix
+    :param Bpqpv: linear susceptance matrix sliced to avoid the slacks
     :param Bf: Bus-branch "from" susceptance matrix
+    :param Btau:
+    :param tau:
     :param pqpv: array of sorted pq and pv node indices
     :param distribute_slack: distribute the slack?
+    :param add_ps_effects
     :return: PTDF matrix. It is a full matrix of dimensions Branches x buses
     """
 
@@ -165,13 +170,19 @@ def make_ptdf(Bpqpv: sp.csc_matrix,
         for i in range(n):
             dP[i, i] = 1.0
     else:
-        dP = np.eye(n, n)
+        dP = np.eye(n)
+
+    if add_ps_effects:
+        # Pps = -(Btau @ tau)
+        Pps = (Bf.T @ tau)
+        for i in pqpv:
+            dP[:, i] += Pps  # effect of the phase shifters
 
     # solve for change in voltage angles
-    dTheta = np.zeros((nb, nbi))
-    # Bref = Bbus[noslack, :][:, noref].tocsc()
     dtheta_ref = spsolve(Bpqpv, dP[noslack, :])
 
+    # fill the angle increments for all the nodes
+    dTheta = np.zeros((nb, nbi))
     if sp.issparse(dtheta_ref):
         dTheta[noref, :] = dtheta_ref.toarray()
     else:
@@ -179,9 +190,9 @@ def make_ptdf(Bpqpv: sp.csc_matrix,
 
     # compute corresponding change in branch Sf
     # Bf is a sparse matrix
-    H = Bf * dTheta
+    PTDF = Bf * dTheta
 
-    return H
+    return PTDF
 
 
 def make_lodf(Cf: sp.csc_matrix,
@@ -683,7 +694,8 @@ class LinearAnalysis:
                         # compute the PTDF of the island
                         ptdf_island = make_ptdf(Bpqpv=island.Bpqpv,
                                                 Bf=island.Bf,
-                                                Btheta=island.Btau,
+                                                Btau=island.Btau,
+                                                tau=island.branch_data.tap_angle,
                                                 pqpv=island.pqpv,
                                                 distribute_slack=self.distributed_slack)
 
@@ -711,7 +723,8 @@ class LinearAnalysis:
             # there is only 1 island, compute the PTDF
             self.PTDF = make_ptdf(Bpqpv=islands[0].Bpqpv,
                                   Bf=islands[0].Bf,
-                                  Btheta=islands[0].Btau,
+                                  Btau=islands[0].Btau,
+                                  tau=islands[0].branch_data.tap_angle,
                                   pqpv=islands[0].pqpv,
                                   distribute_slack=self.distributed_slack)
 

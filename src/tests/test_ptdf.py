@@ -69,7 +69,8 @@ def test_ptdf():
 
 def test_ptdf_ieee14_definition():
     """
-    Compare the PSSE LODF and the GridCal LODF for the IEEE14
+    Compare the PTDF computed analitically and the PTDF computed using DC power flow
+    to check that they are exactly the same
     """
     for fname in [
         os.path.join('data', 'grids', 'RAW', 'IEEE 14 bus.raw'),
@@ -106,6 +107,49 @@ def test_ptdf_ieee14_definition():
         # print(diff)
 
         assert (np.isclose(simulation.results.PTDF, ptdf).all())
+
+
+def test_ptdf_ieee14_definition_ps():
+    """
+    Compare the PTDF computed analitically and the PTDF computed using DC power flow
+    to check that they are exactly the same, for IEEE14 with a phase shifter
+    """
+    for fname in [
+        os.path.join('data', 'grids', 'IEEE14-bus_d-6_11-6_13.gridcal'),
+    ]:
+        main_circuit = FileOpen(fname).open()
+
+        # add all branch contingencies
+        add_n1_contingencies(branches=main_circuit.get_branches(),
+                             vmax=1e20, vmin=0,
+                             filter_branches_by_voltage=False,
+                             branch_types=[DeviceType.LineDevice, DeviceType.Transformer2WDevice])
+
+        # run the linear analysis
+        options = LinearAnalysisOptions(distribute_slack=False, correct_values=False)
+        simulation = LinearAnalysisDriver(grid=main_circuit, options=options)
+        simulation.run()
+
+        # compute the PTDF by the definition: PTDF(i, j) = (flow base(i) - modified flow(i)) / bus power increase(j)
+        nc = compile_numerical_circuit_at(main_circuit, t_idx=None)
+        options = PowerFlowOptions(solver_type=SolverType.DC)
+        base_res = multi_island_pf_nc(nc=nc, options=options)
+        S = nc.Sbus.copy()
+        ptdf = np.zeros((nc.nbr, nc.nbus))
+
+        for i in range(nc.nbus):
+            dS = np.zeros(nc.nbus)
+            dS[i] += 0.01  # 1 MW in p.u.
+            res = multi_island_pf_nc(nc=nc, options=options, Sbus_input=S + dS)
+            ptdf[:, i] = (res.Sf.real - base_res.Sf.real) / (dS[i] * nc.Sbase)
+
+        # diff = simulation.results.PTDF - ptdf
+        # print(diff)
+        print("Analytic PTDF:\n", simulation.results.PTDF)
+        print("Definition PTDF:\n", ptdf)
+
+        ok = np.allclose(simulation.results.PTDF, ptdf, atol=1e-6)
+        assert ok
 
 
 def test_lodf_ieee14_definition():
@@ -408,10 +452,10 @@ def test_mlodf_sanpen():
     Compare power flow per branches in N-2 contingencies using theoretical methodology and MLODF
     """
     for fname in [
+        os.path.join('data', 'grids', 'IEEE14-bus_d-6_11-6_13.gridcal'),  # TODO: SANPEN: this fails, is this a conceptual failure?
+        os.path.join('data', 'grids', 'IEEE14-bus_d-7_8-9_10.gridcal'),  # TODO: SANPEN: this fails, is this a conceptual failure?
         os.path.join('data', 'grids', 'IEEE14-2_4_1-3_4_1.gridcal'),
         os.path.join('data', 'grids', 'IEEE14-2_5_1-1_5_1.gridcal'),
-        # os.path.join('data', 'grids', 'IEEE14-bus_d-6_11-6_13.gridcal'),  # TODO: SANPEN: this fails, is this a conceptual failure?
-        # os.path.join('data', 'grids', 'IEEE14-bus_d-7_8-9_10.gridcal')  # TODO: SANPEN: this fails, is this a conceptual failure?
     ]:
         main_circuit = FileOpen(fname).open()
 
