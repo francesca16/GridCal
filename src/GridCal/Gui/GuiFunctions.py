@@ -2209,37 +2209,77 @@ class ObjectTreeModel(QtCore.QAbstractItemModel):
     ObjectTreeModel
     """
 
-    def __init__(self, rootObject: EditableDevice, parent=None):
+    def __init__(self, rootObject: EditableDevice, t_idx: Union[None, int] = None, parent=None):
         super().__init__(parent)
+
+        # time index to display the object's data
+        self.t_idx = t_idx
+
+        # pointer to the object
         self.rootObject = rootObject
 
+        # this model's headers
         self._headers = ['Name', 'Value', 'Units']
 
-        self.property_names = list()
-        self.attribute_types = list()
-        self.units = list()
-        self.tips = list()
+    def index(self, row, column, parent=QtCore.QModelIndex()):
+        """
 
-        for key, prop in self.rootObject.registered_properties.items():
-            self.property_names.append(prop.name)
-            self.attribute_types.append(prop.tpe)
-            self.units.append(prop.units)
-            self.tips.append(prop.definition)
+        :param row:
+        :param column:
+        :param parent:
+        :return:
+        """
+        if not self.hasIndex(row, column, parent):
+            return QtCore.QModelIndex()
 
-    def parent(self, child: Union[QtCore.QModelIndex, QtCore.QPersistentModelIndex]):
+        if not parent.isValid():
+            # The parent is the root item
+            return self.createIndex(row, column, None)
+        else:
+            # It's a nested item
+            parent_object = parent.parent().internalPointer()
+            nested_object = parent_object.get_property_value_by_idx(property_idx=parent.row(), t_idx=None)
+
+            if isinstance(nested_object, EditableDevice):
+                return self.createIndex(row, column, parent_object)
+            else:
+                return QtCore.QModelIndex()
+
+    def parent(self, index: QtCore.QModelIndex):
         """
 
         :return:
         """
-        return QtCore.QModelIndex()  # This model is flat, so there are no parents
 
-    def flags(self, index):
+        if not index.internalPointer():
+            if not index.isValid():
+                return QtCore.QModelIndex()
+            else:
+                # It's the root item
+                return QtCore.QModelIndex()
+        else:
+
+            # It's a nested item
+            nested_object = index.internalPointer()
+
+            if isinstance(nested_object, EditableDevice):
+                parent_object = index.parent().internalPointer()
+                matching_parent_props, indices = parent_object.get_properties_containing_object(obj=nested_object)
+                if len(matching_parent_props) == 1:
+                    parent_row = indices[0]
+                    return self.createIndex(parent_row, 0, parent_object)
+                else:
+                    return QtCore.QModelIndex()
+            else:
+                return QtCore.QModelIndex()
+
+    def flags(self, index: QtCore.QModelIndex) -> QtCore.Qt.ItemFlag:
         """
 
         :param index:
         :return:
         """
-        row = index.row()
+        # row = index.row()
         col = index.column()
 
         if col == 1:
@@ -2253,9 +2293,18 @@ class ObjectTreeModel(QtCore.QAbstractItemModel):
         :param parentIndex:
         :return:
         """
-        if not parentIndex.isValid():
-            return len(self.property_names)  # There is one root item
-        return 0
+        if parentIndex.isValid():
+            # Nested rows correspond to properties of NestedObject
+            parent_object = parentIndex.parent().internalPointer()
+
+            if parent_object is not None:
+                nested_object = parent_object.get_property_value_by_idx(property_idx=parentIndex.row(), t_idx=None)
+                if isinstance(nested_object, EditableDevice):
+                    return nested_object.get_number_of_properties()
+
+            return 0
+
+        return self.rootObject.get_number_of_properties()  # There is one root item
 
     def columnCount(self, parentIndex=QtCore.QModelIndex()):
         """
@@ -2281,9 +2330,9 @@ class ObjectTreeModel(QtCore.QAbstractItemModel):
             return self._headers[section]
         return None
 
-    def data(self, index, role=QtCore.Qt.ItemDataRole.DisplayRole):
+    def data(self, index: QtCore.QModelIndex, role=QtCore.Qt.ItemDataRole.DisplayRole) -> Any:
         """
-
+        Data getter from the model
         :param index:
         :param role:
         :return:
@@ -2298,17 +2347,33 @@ class ObjectTreeModel(QtCore.QAbstractItemModel):
             # It's the root item
             if role == QtCore.Qt.ItemDataRole.DisplayRole:
 
-                # Access the data from your object model
-                property_name = self.property_names[row]
+                prop = self.rootObject.property_list[row]
 
                 if col == 0:
-                    return property_name
+                    return prop.name
                 elif col == 1:
-                    # Assume your object has a method to get the data for a property
-                    val = getattr(self.rootObject, property_name)
-                    return str(val)
+                    nested_val = self.rootObject.get_property_value(prop=prop, t_idx=self.t_idx)
+                    return str(nested_val)
                 elif col == 2:
-                    return self.units[row]
+                    # Add units for nested properties if needed
+                    return prop.units
+        else:
+            # It's a nested item
+            parent_object = index.parent().internalPointer()
+            prop = parent_object.get_property_by_idx(property_idx=index.parent().row())
+            nested_object = parent_object.get_property_value(prop=prop, t_idx=None)
+
+            if nested_object:
+                prop = nested_object.property_list[row]
+
+                if col == 0:
+                    return prop.name
+                elif col == 1:
+                    nested_val = nested_object.get_property_value(prop=prop, t_idx=self.t_idx)
+                    return str(nested_val)
+                elif col == 2:
+                    # Add units for nested properties if needed
+                    return prop.units
 
         return ""
 
@@ -2330,34 +2395,42 @@ class ObjectTreeModel(QtCore.QAbstractItemModel):
             # It's the root item, and you may want to handle this case differently
             return False
 
-        # Access the data from your object model
-        property_name = self.property_names[row]
+        if not index.parent().isValid():
+            # It's the root item
+            if role == QtCore.Qt.ItemDataRole.DisplayRole:
 
-        # Assume your object has a method to set the data for a property
-        setattr(self.rootObject, property_name, value)
+                prop = self.rootObject.property_list[row]
 
-        # Emit the dataChanged signal to notify the views about the update
-        self.dataChanged.emit(index, index, [QtCore.Qt.ItemDataRole.EditRole])
+                if col == 0:
+                    return True
+                elif col == 1:
+                    setattr(self.rootObject, prop.name, value)
+                    return True
+                elif col == 2:
+                    # Add units for nested properties if needed
+                    return True
+        else:
+            # It's a nested item
+            parent_object = index.parent().internalPointer()
+            prop = parent_object.get_property_by_idx(property_idx=index.parent().row())
+            nested_object = parent_object.get_property_value(prop=prop, t_idx=None)
+
+            if nested_object:
+                prop = nested_object.property_list[row]
+
+                if col == 0:
+                    return True
+                elif col == 1:
+                    nested_val = getattr(nested_object, prop.name)
+                    setattr(nested_object, prop.name, value)
+                    return True
+                elif col == 2:
+                    # Add units for nested properties if needed
+                    return True
 
         return True
 
-    def index(self, row, column, parent=QtCore.QModelIndex()):
-        """
 
-        :param row:
-        :param column:
-        :param parent:
-        :return:
-        """
-        if not self.hasIndex(row, column, parent):
-            return QtCore.QModelIndex()
-
-        if not parent.isValid():
-            # The parent is the root item
-            return self.createIndex(row, column, None)
-
-        # Indexing is not applicable for this model since it's flat
-        return QtCore.QModelIndex()
 
 
 if __name__ == '__main__':
