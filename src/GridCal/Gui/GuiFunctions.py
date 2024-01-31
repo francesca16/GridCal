@@ -42,6 +42,7 @@ class TreeDelegate(QtWidgets.QItemDelegate):
     """
     
     """
+
     def __init__(self, parent, data=defaultdict()):
         """
         Constructor
@@ -112,7 +113,6 @@ class TreeDelegate(QtWidgets.QItemDelegate):
 
 
 class ComboDelegate(QtWidgets.QItemDelegate):
-
     """
     A delegate that places a fully functioning QComboBox in every
     cell of the column to which it's applied
@@ -421,6 +421,7 @@ class PandasModel(QtCore.QAbstractTableModel):
     """
     Class to populate a Qt table view with a pandas data frame
     """
+
     def __init__(self, data: pd.DataFrame, parent=None, editable=False, editable_min_idx=-1, decimals=6):
         """
 
@@ -657,6 +658,7 @@ class ObjectsModel(QtCore.QAbstractTableModel):
     """
     Class to populate a Qt table view with the properties of objects
     """
+
     def __init__(self,
                  objects: List[EditableDevice],
                  editable_headers: Dict[str, GCProp],
@@ -1113,6 +1115,7 @@ class RosetaObjectsModel(QtCore.QAbstractTableModel):
     """
     Class to populate a Qt table view with the properties of objects
     """
+
     def __init__(self, objects, editable_headers, parent=None, editable=False,
                  non_editable_attributes=list(), transposed=False, check_unique=list(),
                  dictionary_of_lists={}):
@@ -1464,6 +1467,7 @@ class ProfilesModel(QtCore.QAbstractTableModel):
     """
     Class to populate a Qt table view with profiles from objects
     """
+
     def __init__(self, multi_circuit, device_type: DeviceType, magnitude, format, parent, max_undo_states=100):
         """
 
@@ -1741,7 +1745,6 @@ class ProfilesModel(QtCore.QAbstractTableModel):
         Un-do table changes
         """
         if self.history.can_undo():
-
             action, data = self.history.undo()
 
             self.restore(data)
@@ -1755,7 +1758,6 @@ class ProfilesModel(QtCore.QAbstractTableModel):
         Re-do table changes
         """
         if self.history.can_redo():
-
             action, data = self.history.redo()
 
             self.restore(data)
@@ -1772,6 +1774,7 @@ class DiagramsModel(QtCore.QAbstractListModel):
     # from GridCal.Gui.BusBranchEditorWidget import BusBranchEditorWidget
     # from GridCal.Gui.MapWidget.grid_map_widget import GridMapWidget
     """
+
     def __init__(self, list_of_diagrams: List[Union["BusBranchEditorWidget", "GridMapWidget", "BusViewerGUI"]]):
         """
         Enumeration model
@@ -1899,7 +1902,6 @@ def get_logger_tree_model(logger: DataLogger):
             # print('\t', message)
 
             for time, elm, elm_class, elm_property, value, expected_value, comment in data_list:
-
                 # print('\t', '\t', time, elm, value, expected_value)
 
                 time_child = QtGui.QStandardItem(time)
@@ -1936,7 +1938,8 @@ def get_logger_tree_model(logger: DataLogger):
     return model
 
 
-def get_icon_list_model(lst: List[Tuple[str, QtGui.QIcon]], checks=False, check_value=False) -> QtGui.QStandardItemModel:
+def get_icon_list_model(lst: List[Tuple[str, QtGui.QIcon]], checks=False,
+                        check_value=False) -> QtGui.QStandardItemModel:
     """
 
     :param lst:
@@ -2152,9 +2155,9 @@ def add_cim_object_node(class_tag, device: IdentifiedObject, editable=False, alr
         else:
             # if the property is a value (float, str, bool, etc.) just add it
 
-            tpe = str(type(property_value)).replace('class', '')\
-                .replace("'", "")\
-                .replace("<", "")\
+            tpe = str(type(property_value)).replace('class', '') \
+                .replace("'", "") \
+                .replace("<", "") \
                 .replace(">", "").strip()
 
             class_name_child = QtGui.QStandardItem(tpe)
@@ -2188,7 +2191,6 @@ def get_cim_tree_model(cim_model: CgmesCircuit):
         class_child = QtGui.QStandardItem(class_name + " (" + str(len(device_list)) + ")")
 
         for device in device_list:
-
             # add device with all it's properties
             device_child = add_cim_object_node(class_tag=None, device=device, editable=editable, already_visited=list())
 
@@ -2200,3 +2202,188 @@ def get_cim_tree_model(cim_model: CgmesCircuit):
         root_node.appendRow(class_child)
 
     return model
+
+
+class ObjectTreeModel(QtCore.QAbstractItemModel):
+    """
+    ObjectTreeModel
+    """
+
+    def __init__(self, rootObject: EditableDevice, parent=None):
+        super().__init__(parent)
+        self.rootObject = rootObject
+
+        self._headers = ['Name', 'Value', 'Units']
+
+        self.property_names = list()
+        self.attribute_types = list()
+        self.units = list()
+        self.tips = list()
+
+        for key, prop in self.rootObject.registered_properties.items():
+            self.property_names.append(prop.name)
+            self.attribute_types.append(prop.tpe)
+            self.units.append(prop.units)
+            self.tips.append(prop.definition)
+
+    def parent(self, child: Union[QtCore.QModelIndex, QtCore.QPersistentModelIndex]):
+        """
+
+        :return:
+        """
+        return QtCore.QModelIndex()  # This model is flat, so there are no parents
+
+    def flags(self, index):
+        """
+
+        :param index:
+        :return:
+        """
+        row = index.row()
+        col = index.column()
+
+        if col == 1:
+            return QtCore.Qt.ItemFlag.ItemIsEditable | QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsSelectable
+        else:
+            return QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsSelectable
+
+    def rowCount(self, parentIndex=QtCore.QModelIndex()):
+        """
+
+        :param parentIndex:
+        :return:
+        """
+        if not parentIndex.isValid():
+            return len(self.property_names)  # There is one root item
+        return 0
+
+    def columnCount(self, parentIndex=QtCore.QModelIndex()):
+        """
+
+        :param parentIndex:
+        :return:
+        """
+        return 3
+
+    def headerData(self,
+                   section: int,
+                   orientation: QtCore.Qt.Orientation,
+                   role=QtCore.Qt.ItemDataRole.DisplayRole):
+        """
+        Get the headers to display
+        :param section:
+        :param orientation:
+        :param role:
+        :return:
+        """
+
+        if role == QtCore.Qt.ItemDataRole.DisplayRole and orientation == QtCore.Qt.Orientation.Horizontal:
+            return self._headers[section]
+        return None
+
+    def data(self, index, role=QtCore.Qt.ItemDataRole.DisplayRole):
+        """
+
+        :param index:
+        :param role:
+        :return:
+        """
+        if not index.isValid() or role != QtCore.Qt.ItemDataRole.DisplayRole:
+            return None
+
+        row = index.row()
+        col = index.column()
+
+        if not index.parent().isValid():
+            # It's the root item
+            if role == QtCore.Qt.ItemDataRole.DisplayRole:
+
+                # Access the data from your object model
+                property_name = self.property_names[row]
+
+                if col == 0:
+                    return property_name
+                elif col == 1:
+                    # Assume your object has a method to get the data for a property
+                    val = getattr(self.rootObject, property_name)
+                    return str(val)
+                elif col == 2:
+                    return self.units[row]
+
+        return ""
+
+    def setData(self, index, value, role=QtCore.Qt.ItemDataRole.EditRole):
+        """
+
+        :param index:
+        :param value:
+        :param role:
+        :return:
+        """
+        if not index.isValid() or role != QtCore.Qt.ItemDataRole.EditRole:
+            return False
+
+        row = index.row()
+        col = index.column()
+
+        if not index.parent().isValid():
+            # It's the root item, and you may want to handle this case differently
+            return False
+
+        # Access the data from your object model
+        property_name = self.property_names[row]
+
+        # Assume your object has a method to set the data for a property
+        setattr(self.rootObject, property_name, value)
+
+        # Emit the dataChanged signal to notify the views about the update
+        self.dataChanged.emit(index, index, [QtCore.Qt.ItemDataRole.EditRole])
+
+        return True
+
+    def index(self, row, column, parent=QtCore.QModelIndex()):
+        """
+
+        :param row:
+        :param column:
+        :param parent:
+        :return:
+        """
+        if not self.hasIndex(row, column, parent):
+            return QtCore.QModelIndex()
+
+        if not parent.isValid():
+            # The parent is the root item
+            return self.createIndex(row, column, None)
+
+        # Indexing is not applicable for this model since it's flat
+        return QtCore.QModelIndex()
+
+
+if __name__ == '__main__':
+    import sys
+    import GridCalEngine.Core.Devices as dev
+
+
+    b1 = dev.Bus(name="Bus1")
+    b2 = dev.Bus(name="Bus2")
+    object_model = dev.Line(bus_from=b1, bus_to=b2)
+
+
+
+    # Create the application instance
+    app = QtWidgets.QApplication([])
+
+    # Create a main window
+    main_window = QtWidgets.QMainWindow()
+
+    # Create and set up the tree view
+    # Create and set up the tree model
+    tree_model = ObjectTreeModel(object_model, parent=main_window)
+    tree_view = QtWidgets.QTreeView()
+    tree_view.setModel(tree_model)
+
+    main_window.setCentralWidget(tree_view)
+
+    main_window.show()
+    sys.exit(app.exec())
