@@ -9,7 +9,7 @@ https://github.com/pypa/sampleproject
 from setuptools import setup, find_packages
 import os
 
-from GridCalEngine.__version__ import __GridCalEngine_VERSION__
+# from GridCalEngine.__version__ import __GridCalEngine_VERSION__
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -86,7 +86,7 @@ extras_require = {
 
 setup(
     name='GridCalEngine',  # Required
-    version=__GridCalEngine_VERSION__,  # Required
+    version='5.20.0',  # Required
     license='LGPL',
     description=description,  # Optional
     long_description=long_description,  # Optional
