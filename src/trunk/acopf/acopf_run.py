@@ -265,8 +265,36 @@ def case_pegase89():
     nc.generator_data.cost_0[:] = 0
     nc.generator_data.cost_1[:] = 0
     nc.generator_data.cost_2[:] = 0
-    pf_options = gce.PowerFlowOptions(solver_type=gce.SolverType.NR, verbose=1, tolerance=1e-8)
-    ac_optimal_power_flow(nc=nc, pf_options=pf_options, plot_error=True)
+    pf_options = gce.PowerFlowOptions(solver_type=gce.SolverType.NR, verbose=1, tolerance=1e-8, max_iter=35)
+    d_opf_results = ac_optimal_power_flow(nc=nc, pf_options=pf_options, plot_error=True)
+
+    grid.get_bus_branch_connectivity_matrix()
+    nc = compile_numerical_circuit_at(grid)
+    print('')
+
+def case_118REE():
+    """
+    IEEE 118 REE
+    """
+    cwd = os.getcwd()
+
+    # Go back two directories
+    new_directory = os.path.abspath(os.path.join(cwd, '..', '..', '..'))
+
+    file_path = os.path.join(new_directory, 'Grids_and_profiles', 'grids', 'IEEE118busREE_Winter.raw')
+
+    grid = gce.FileOpen(file_path).open()
+    for line in grid.lines:
+        line.rate=10000
+
+    for trafo in grid.transformers2w:
+        trafo.rate=10000
+    nc = compile_numerical_circuit_at(grid)
+    nc.generator_data.cost_0[:] = 0
+    nc.generator_data.cost_1[:] = 0
+    nc.generator_data.cost_2[:] = 0
+    pf_options = gce.PowerFlowOptions(solver_type=gce.SolverType.NR, verbose=1, tolerance=1e-8, max_iter=50)
+    d_opf_results = ac_optimal_power_flow(nc=nc, pf_options=pf_options, plot_error=True)
 
     grid.get_bus_branch_connectivity_matrix()
     nc = compile_numerical_circuit_at(grid)
@@ -285,8 +313,46 @@ def case300():
     file_path = os.path.join(new_directory, 'Grids_and_profiles', 'grids', 'case300.m')
 
     grid = gce.FileOpen(file_path).open()
+
+    nc = compile_numerical_circuit_at(grid)
+    nc.generator_data.cost_0[:] = 0
+    nc.generator_data.cost_1[:] = 0
+    nc.generator_data.cost_2[:] = 0
+
     pf_options = gce.PowerFlowOptions(solver_type=gce.SolverType.NR, verbose=1, max_iter=50)
+    #run_nonlinear_opf(grid=grid, pf_options=pf_options, plot_error=True)
+    d_opf_results = ac_optimal_power_flow(nc=nc, pf_options=pf_options, plot_error=True)
+
+    grid.get_bus_branch_connectivity_matrix()
+
+def case_IEEE118_GC():
+    """
+    case300.m
+    """
+    cwd = os.getcwd()
+
+    # Go back two directories
+    new_directory = os.path.abspath(os.path.join(cwd, '..', '..', '..'))
+
+    file_path = os.path.join(new_directory, 'Grids_and_profiles', 'grids', 'IEEE118_opf.gridcal')
+
+    grid = gce.FileOpen(file_path).open()
+
+    for line in grid.lines:
+        line.rate=line.rate*100
+    for trafo in grid.transformers2w:
+        trafo.rate=trafo.rate*100
+
+    nc = compile_numerical_circuit_at(grid)
+    #nc.generator_data.cost_0[:] = 0
+    #nc.generator_data.cost_1[:] = 0
+    #nc.generator_data.cost_2[:] = 0
+
+    pf_options = gce.PowerFlowOptions(solver_type=gce.SolverType.NR, verbose=1, max_iter=100)
     run_nonlinear_opf(grid=grid, pf_options=pf_options, plot_error=True)
+    #d_opf_results = ac_optimal_power_flow(nc=nc, pf_options=pf_options, plot_error=True)
+
+    grid.get_bus_branch_connectivity_matrix()
 
 
 def case6ww():
@@ -314,5 +380,7 @@ if __name__ == '__main__':
     # case14()
     # case_gb()
     # case6ww()
-    case_pegase89()
+    # case_pegase89()
     # case300()
+    #case_118REE()
+    case_IEEE118_GC()
